@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 #define BOARD_SIZE 20
 #define FPS 15
@@ -24,6 +25,8 @@ int CountAliveNeighbours(Board *board, int i, int j);
 
 int main()
 {
+    srand(time(NULL));
+
     Board board;
     board.size = BOARD_SIZE;
     board.cells = (int **)malloc(board.size * sizeof(int *));
