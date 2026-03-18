@@ -1,0 +1,160 @@
+; GAME OF LIFE
+; Each position in ram will be split in 2 nibbles
+;	Highest 4 bits used for current board
+;	Lowest 4 bits used for buffer board (next generation)
+;	CURRENT 0000 | 0000 BUFFER
+
+; R20 - R29 -> general use (i.e. usage in subroutines)
+;	They won't have their values restored after subroutine end
+
+#define BOARD_SIZE 16
+#define BOARD_CHANGED REG0
+
+; Initilize board with random values
+label InitializeBoard
+	rnd 0 1 ram
+	shl ram 4 ram ; store value in high nibble
+	inc cursor
+	if cursor < 255 then : goto InitializeBoard : end if
+rnd 0 1 ram
+shl ram 4 ram
+
+label MainLoop
+	clear
+	goto PrintBoard
+	goto ComputeNextGeneration
+	wait 100
+	if BOARD_CHANGED = 1 then : goto MainLoop : end if
+
+HALT
+
+subroutine PrintBoard
+	copy cursor stack
+	
+	#pragma char true
+	copy 0 cursor
+	copy 0 reg20
+	copy 0 reg21
+	label PrintBoard_loop
+		shr ram 4 reg22
+		if reg22 = 0 then : print 176 : end if
+		if reg22 > 0 then : print 178 : end if
+
+		#pragma overflow true
+		add cursor 1 reg23
+		#pragma overflow false
+		mod reg23 BOARD_SIZE reg23
+		if reg23 = 0 then : print "\n" : end if
+
+		if cursor = 255 then : goto PrintBoard_loop_exit : end if
+		inc cursor
+		goto PrintBoard_loop
+
+	label PrintBoard_loop_exit
+		#pragma char false
+		copy stack cursor
+		return
+
+; RETURNS
+;	Alive neighbours around CURSOR in REG20
+subroutine CountAliveNeighbours
+	copy cursor stack
+	copy cursor reg22     ; base index
+	copy 0 reg20          ; count
+
+	; row mask / col
+	and reg22 240 reg28   ; high nibble (row * 16)
+	and reg22 15 reg29    ; low nibble (col)
+
+	if reg28 = 0 then : goto CountAliveNeighbours_skipTop : end if
+		if reg29 > 0 then
+			; has Top-Left
+			sub reg22 17 cursor
+			shr ram 4 reg21 : add reg20 reg21 reg20
+		end if
+
+		sub reg22 16 cursor
+		shr ram 4 reg21 : add reg20 reg21 reg20
+
+		if reg29 < 15 then
+			; has Top-Right
+			sub reg22 15 cursor
+			shr ram 4 reg21 : add reg20 reg21 reg20
+		end if
+	label CountAliveNeighbours_skipTop
+
+	if reg29 > 0 then
+		sub reg22 1 cursor
+		shr ram 4 reg21 : add reg20 reg21 reg20
+	end if
+
+	if reg29 < 15 then
+		add reg22 1 cursor
+		shr ram 4 reg21 : add reg20 reg21 reg20
+	end if
+
+	if reg28 = 240 then : goto CountAliveNeighbours_skipBottom : end if
+		if reg29 > 0 then
+			; has Bottom-Left
+			add reg22 15 cursor
+			shr ram 4 reg21 : add reg20 reg21 reg20
+		end if
+
+		add reg22 16 cursor
+		shr ram 4 reg21 : add reg20 reg21 reg20
+
+		if reg29 < 15 then
+			; has Bottom-Right
+			add reg22 17 cursor
+			shr ram 4 reg21 : add reg20 reg21 reg20
+		end if
+	label CountAliveNeighbours_skipBottom
+	
+	copy stack cursor
+	return
+
+subroutine ComputeNextGeneration
+	copy cursor stack
+	
+	copy 0 BOARD_CHANGED
+	copy 0 cursor
+	; reg20 reserved for CountAliveNeighbours
+
+	label ComputeNextGeneration_loop
+		goto CountAliveNeighbours
+		copy 0 reg22
+
+		shr ram 4 reg21
+		if reg21 = 1 then
+			if reg20 = 2 then : copy 1 reg22 : end if
+			if reg20 = 3 then : copy 1 reg22 : end if
+		end if
+		if reg21 = 0 then
+			if reg20 = 3 then : copy 1 reg22 : end if
+		end if
+		
+		shr ram 4 ram ; keep high nibble only
+		shl ram 4 ram ; move it back to high nibble position
+		add ram reg22 ram ; pack nibbles
+
+		if reg21 != reg22 then : copy 1 BOARD_CHANGED : end if
+
+		if cursor = 255 then : goto ComputeNextGeneration_swap : end if
+		inc cursor
+		goto ComputeNextGeneration_loop
+
+	label ComputeNextGeneration_swap
+	copy 0 cursor
+		label ComputeNextGeneration_swap_loop
+			copy ram reg21
+			shr reg21 4 reg21
+			shl reg21 4 reg21
+			sub ram reg21 ram ; keep low nibble only
+			shl ram 4 ram
+		
+			if cursor = 255 then
+				copy stack cursor
+				return
+			end if
+			inc cursor
+			goto ComputeNextGeneration_swap_loop
