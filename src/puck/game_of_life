@@ -8,7 +8,13 @@
 ;	They won't have their values restored after subroutine end
 
 #define BOARD_SIZE 16
-#define BOARD_CHANGED REG0
+#define BOARD_SIZE-1 15
+
+clear
+println "--GAME OF LIFE in PUCK--\nIt is recommended to start this program using encoding 437."
+print "\rThe simulation will start in 3..." : wait 100 10
+print "\rThe simulation will start in 2..." : wait 100 10
+print "\rThe simulation will start in 1..." : wait 100 10
 
 ; Initilize board with random values
 label InitializeBoard
@@ -23,11 +29,9 @@ label MainLoop
 	clear
 	goto PrintBoard
 	goto ComputeNextGeneration
-	wait 100
-	if BOARD_CHANGED = 1 then : goto MainLoop : end if
-
-HALT
-
+	wait 100 1
+	goto MainLoop
+	
 subroutine PrintBoard
 	copy cursor stack
 	
@@ -59,12 +63,13 @@ subroutine PrintBoard
 ;	Alive neighbours around CURSOR in REG20
 subroutine CountAliveNeighbours
 	copy cursor stack
+	
 	copy cursor reg22     ; base index
 	copy 0 reg20          ; count
 
 	; row mask / col
 	and reg22 240 reg28   ; high nibble (row * 16)
-	and reg22 15 reg29    ; low nibble (col)
+	and reg22 BOARD_SIZE-1 reg29    ; low nibble (col)
 
 	if reg28 = 0 then : goto CountAliveNeighbours_skipTop : end if
 		if reg29 > 0 then
@@ -76,7 +81,7 @@ subroutine CountAliveNeighbours
 		sub reg22 16 cursor
 		shr ram 4 reg21 : add reg20 reg21 reg20
 
-		if reg29 < 15 then
+		if reg29 < BOARD_SIZE-1 then
 			; has Top-Right
 			sub reg22 15 cursor
 			shr ram 4 reg21 : add reg20 reg21 reg20
@@ -88,7 +93,7 @@ subroutine CountAliveNeighbours
 		shr ram 4 reg21 : add reg20 reg21 reg20
 	end if
 
-	if reg29 < 15 then
+	if reg29 < BOARD_SIZE-1 then
 		add reg22 1 cursor
 		shr ram 4 reg21 : add reg20 reg21 reg20
 	end if
@@ -103,7 +108,7 @@ subroutine CountAliveNeighbours
 		add reg22 16 cursor
 		shr ram 4 reg21 : add reg20 reg21 reg20
 
-		if reg29 < 15 then
+		if reg29 < BOARD_SIZE-1 then
 			; has Bottom-Right
 			add reg22 17 cursor
 			shr ram 4 reg21 : add reg20 reg21 reg20
@@ -116,7 +121,6 @@ subroutine CountAliveNeighbours
 subroutine ComputeNextGeneration
 	copy cursor stack
 	
-	copy 0 BOARD_CHANGED
 	copy 0 cursor
 	; reg20 reserved for CountAliveNeighbours
 
@@ -136,8 +140,6 @@ subroutine ComputeNextGeneration
 		shr ram 4 ram ; keep high nibble only
 		shl ram 4 ram ; move it back to high nibble position
 		add ram reg22 ram ; pack nibbles
-
-		if reg21 != reg22 then : copy 1 BOARD_CHANGED : end if
 
 		if cursor = 255 then : goto ComputeNextGeneration_swap : end if
 		inc cursor
